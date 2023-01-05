@@ -7,7 +7,7 @@
 # Limit in USD
 $USDlimit=50
 # User to be Queried
-$BGGuser="jjz4gaming"
+$BGGuser="aniaga"
 ############################
 # NOTHING TO DO BELOW HERE #
 ############################
@@ -62,6 +62,7 @@ elseif($region -eq "Australia"){
     $limit = [int]$CADlimit/(Get-ExchangeRate "FXAUDCAD")
 }
 else{
+    $region = "United States"
     $outputObject = "price"
     $limit = $USDlimit
 }    

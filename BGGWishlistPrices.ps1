@@ -22,11 +22,11 @@ if(!(test-path "c:\temp")){
 do{
     invoke-restmethod "https://boardgamegeek.com/xmlapi2/collection?username=$BGGuser&wishlist=1" -outfile "c:\temp\wishlist.xml"
     [xml]$XmlDocument = cat "c:\temp\wishlist.xml"
-    if($XmlDocument.message.ToString() -like "*Please try again later for access.*"){
-		write-host "Waiting for Wishlist to become available, this can take some time."
+    if($XmlDocument.message -ne $null){
+        write-host "Waiting for Wishlist to become available, this can take some time."
         sleep 30
     }
-}while($XmlDocument.message.ToString() -like "*Please try again later for access.*")
+}while($XmlDocument.message -ne $null)
 $wishlist = $XmlDocument.items.ChildNodes.name.innerxml
 
 invoke-restmethod "https://boardgamegeek.com/xmlapi2/user?name=$BGGuser" -outfile "c:\temp\user.xml"
@@ -34,15 +34,15 @@ invoke-restmethod "https://boardgamegeek.com/xmlapi2/user?name=$BGGuser" -outfil
 $region = $XmlDocument.user.country.value
 
 Function Get-ExchangeRate{
-	Param(
-		[string]$Currency
-	)#End parameters
-	Begin{
+    Param(
+        [string]$Currency
+    )#End parameters
+    Begin{
         $c = new-object system.net.WebClient
         [xml]$Lines = (New-Object system.io.StreamReader $c.OpenRead("https://www.bankofcanada.ca/valet/fx_rss/$Currency")).ReadToEnd()
         $rate = $lines.GetEnumerator().childnodes.statistics.exchangerate.value."#text"
-		$rate
-	}
+        $rate
+    }
 }
 
 $CADlimit = [int]$USDlimit*(Get-ExchangeRate "FXUSDCAD")
@@ -64,7 +64,7 @@ elseif($region -eq "Australia"){
 else{
     $outputObject = "price"
     $limit = $USDlimit
-}	
+}    
 
 # Reset counters
 $notavailable=0
@@ -82,37 +82,37 @@ foreach ($game in $wishlist){
     #sanitise names
     $InvertedValidCharactersRange = "[^A-Za-z0-9 ]"
     $game = $game -replace $InvertedValidCharactersRange, ""
-	#query cost
-	$cost = 999
-	$cost = [int]@(((invoke-webrequest "https://api.boardgameatlas.com/api/search?client_id=$client_id&name=$game").content | ConvertFrom-json).games.$outputObject)[0]
-	
-	# Write Output
-	write-host -nonewline "$game - "
-	if($cost -eq 0){
-	    write-host -foregroundcolor black -backgroundcolor red "Unavailable or Game not found"
-		$notavailable++
-	}
-	elseif($cost -eq 999){
-	    write-host -foregroundcolor black -backgroundcolor red "Error Reading Cost"
-		$Notread++
-	}
-	elseif($cost -le $limit){
-	    write-host -foregroundcolor black -backgroundcolor green $cost
-		$inlimit++
-	}
-	elseif($cost -gt $limit -and $cost -lt $limit*1.5){
-	    write-host -foregroundcolor black -backgroundcolor yellow $cost
-		$slightlyoverlimit++
-	}
-	elseif($cost -ge $limit*1.5){
-	    write-host -foregroundcolor black -backgroundcolor red $cost
-		$overlimit++
-	}
-	
+    #query cost
+    $cost = 999
+    $cost = [int]@(((invoke-webrequest "https://api.boardgameatlas.com/api/search?client_id=$client_id&name=$game").content | ConvertFrom-json).games.$outputObject)[0]
+    
+    # Write Output
+    write-host -nonewline "$game - "
+    if($cost -eq 0){
+        write-host -foregroundcolor black -backgroundcolor red "Unavailable or Game not found"
+        $notavailable++
+    }
+    elseif($cost -eq 999){
+        write-host -foregroundcolor black -backgroundcolor red "Error Reading Cost"
+        $Notread++
+    }
+    elseif($cost -le $limit){
+    write-host -foregroundcolor black -backgroundcolor green $cost
+        $inlimit++
+    }
+    elseif($cost -gt $limit -and $cost -lt $limit*1.5){
+        write-host -foregroundcolor black -backgroundcolor yellow $cost
+        $slightlyoverlimit++
+    }
+    elseif($cost -ge $limit*1.5){
+        write-host -foregroundcolor black -backgroundcolor red $cost
+        $overlimit++
+    }
+    
     if($wishlist.count -gt 40){
-		# Slow Down the requests to avoid rate limiting.
-	    sleep 1
-	}
+        # Slow Down the requests to avoid rate limiting.
+        sleep 1
+    }
 }
 
 # Write Report

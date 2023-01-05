@@ -7,7 +7,7 @@
 # Limit in USD
 $USDlimit=50
 # User to be Queried
-$BGGuser="duellj"
+$BGGuser="jjz4gaming"
 ############################
 # NOTHING TO DO BELOW HERE #
 ############################
@@ -107,6 +107,11 @@ foreach ($game in $wishlist){
 	elseif($cost -ge $limit*1.5){
 	    write-host -foregroundcolor black -backgroundcolor red $cost
 		$overlimit++
+	}
+	
+    if($wishlist.count -gt 40){
+		# Slow Down the requests to avoid rate limiting.
+	    sleep 1
 	}
 }
 

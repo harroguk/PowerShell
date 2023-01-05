@@ -7,7 +7,7 @@
 # Limit in USD
 $USDlimit=50
 # User to be Queried
-$BGGuser="Harroguk"
+$BGGuser="duellj"
 ############################
 # NOTHING TO DO BELOW HERE #
 ############################
@@ -18,20 +18,34 @@ if(!(test-path "c:\temp")){
     mkdir c:\temp\ | out-null
 }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-invoke-restmethod "https://boardgamegeek.com/xmlapi2/collection?username=$BGGuser&wishlist=1" -outfile "c:\temp\wishlist.xml"
-[xml]$XmlDocument = cat "c:\temp\wishlist.xml"
+# Requests the wishlist. This can take some time before it becomes available for the first time.
+do{
+    invoke-restmethod "https://boardgamegeek.com/xmlapi2/collection?username=$BGGuser&wishlist=1" -outfile "c:\temp\wishlist.xml"
+    [xml]$XmlDocument = cat "c:\temp\wishlist.xml"
+    if($XmlDocument.message.ToString() -like "*Please try again later for access.*"){
+		write-host "Waiting for Wishlist to become available, this can take some time."
+        sleep 30
+    }
+}while($XmlDocument.message.ToString() -like "*Please try again later for access.*")
 $wishlist = $XmlDocument.items.ChildNodes.name.innerxml
 
 invoke-restmethod "https://boardgamegeek.com/xmlapi2/user?name=$BGGuser" -outfile "c:\temp\user.xml"
 [xml]$XmlDocument = cat "c:\temp\user.xml"
 $region = $XmlDocument.user.country.value
 
-# set Limit in CAD
-# I am using a canadian Exchange source so all currencys have to be converted through CAD
-$c = new-object system.net.WebClient
-[xml]$Lines = (New-Object system.io.StreamReader $c.OpenRead("https://www.bankofcanada.ca/valet/fx_rss/FXUSDCAD")).ReadToEnd()
-$rate = $lines.GetEnumerator().childnodes.statistics.exchangerate.value."#text"
-$CADlimit = [int]$USDlimit*$rate
+Function Get-ExchangeRate{
+	Param(
+		[string]$Currency
+	)#End parameters
+	Begin{
+        $c = new-object system.net.WebClient
+        [xml]$Lines = (New-Object system.io.StreamReader $c.OpenRead("https://www.bankofcanada.ca/valet/fx_rss/$Currency")).ReadToEnd()
+        $rate = $lines.GetEnumerator().childnodes.statistics.exchangerate.value."#text"
+		$rate
+	}
+}
+
+$CADlimit = [int]$USDlimit*(Get-ExchangeRate "FXUSDCAD")
 
 if($region -eq "Canada"){
     $outputObject = "price_ca"
@@ -39,19 +53,13 @@ if($region -eq "Canada"){
 }
 elseif($region -eq "United Kingdom"){
     # set Limit in GBP
-	# I am using a canadian Exchange source so all currencys have to be converted through CAD
-	[xml]$Lines = (New-Object system.io.StreamReader $c.OpenRead("https://www.bankofcanada.ca/valet/fx_rss/FXGBPCAD")).ReadToEnd()
-    $rate = $lines.GetEnumerator().childnodes.statistics.exchangerate.value."#text"
     $outputObject = "price_uk"
-    $limit = [int]$CADlimit/$rate
+    $limit = [int]$CADlimit/(Get-ExchangeRate "FXGBPCAD")
 }
 elseif($region -eq "Australia"){
     # set Limit in AUD
-	# I am using a canadian Exchange source so all currencys have to be converted through CAD
-	[xml]$Lines = (New-Object system.io.StreamReader $c.OpenRead("https://www.bankofcanada.ca/valet/fx_rss/FXAUDCAD")).ReadToEnd()
-    $rate = $lines.GetEnumerator().childnodes.statistics.exchangerate.value."#text"
     $outputObject = "price_au"
-    $limit = [int]$CADlimit/$rate
+    $limit = [int]$CADlimit/(Get-ExchangeRate "FXAUDCAD")
 }
 else{
     $outputObject = "price"
@@ -64,7 +72,9 @@ $inlimit=0
 $slightlyoverlimit=0
 $overlimit=0
 $Notread=0
-Write-host "Limit in local currency: " [int]$limit
+
+write-host "Using Region           : " $region
+Write-host "Limit in local currency: " ([int]$limit)
 
 # Query Cost of games
 $client_id="G497VGENgX"
@@ -105,11 +115,11 @@ write-host
 write-host "###########"
 write-host "# Summary #"
 write-host "###########"
-write-host "Not Available: $notavailable"
-write-host "Under Limit  : $inlimit"
-write-host "Slightly Over: $slightlyoverlimit"
-write-host "1.5x or more : $overlimit"
-write-host "Errors       : $Notread"
+write-host -foregroundcolor black -backgroundcolor red "Not Available: $notavailable"
+write-host -foregroundcolor black -backgroundcolor green "Under Limit  : $inlimit"
+write-host -foregroundcolor black -backgroundcolor yellow "Slightly Over: $slightlyoverlimit"
+write-host -foregroundcolor black -backgroundcolor red "1.5x or more : $overlimit"
+write-host -foregroundcolor black -backgroundcolor red "Errors       : $Notread"
 write-host "Total        :"($notavailable + $inlimit + $slightlyoverlimit + $overlimit + $Notread)
 
 pause
